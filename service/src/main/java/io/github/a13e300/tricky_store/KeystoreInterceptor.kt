@@ -75,15 +75,15 @@ object KeystoreInterceptor : BinderInterceptor() {
             // Parse the original response from Keystore
             val response = reply.readTypedObject(KeyEntryResponse.CREATOR)
 
-            // Extract the original certificate chain from the response
+            // Extract the real TEE-generated certificate chain
             val chain = Utils.getCertificateChain(response)
 
             if (chain != null) {
-                // Modify only the verified boot fields
-                val newChain = CertHack.hackCertificateChain(chain)
+                // Modify only the verified boot-related fields in the chain
+                val modifiedChain = CertHack.modifyVerifiedBootFields(chain)
 
-                // Replace the chain in the response
-                Utils.putCertificateChain(response, newChain)
+                // Replace the certificate chain in the response
+                Utils.putCertificateChain(response, modifiedChain)
 
                 Logger.i("Modified verified boot fields for uid=$callingUid")
 
