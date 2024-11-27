@@ -80,23 +80,23 @@ object KeystoreInterceptor : BinderInterceptor() {
 
             if (chain != null) {
                 // Modify only the verified boot-related fields in the chain
-                val modifiedChain = CertHack.modifyVerifiedBootFields(chain)
+                val modifiedChain = CertHack.spoofVerifiedBootFields(chain)
 
                 // Replace the certificate chain in the response
                 Utils.putCertificateChain(response, modifiedChain)
 
-                Logger.i("Modified verified boot fields for uid=$callingUid")
+                Logger.i("Spoofed verified boot fields for uid=$callingUid")
 
                 // Write the modified response back to the reply parcel
                 p.writeNoException()
                 p.writeTypedObject(response, 0)
                 return OverrideReply(0, p)
             } else {
-                Logger.i("No certificate chain found for uid=$callingUid")
+                Logger.e("No certificate chain found for uid=$callingUid")
                 p.recycle()
             }
         } catch (t: Throwable) {
-            Logger.e("Failed to modify certificate chain for uid=$callingUid pid=$callingPid!", t)
+            Logger.e("Failed to spoof certificate chain for uid=$callingUid pid=$callingPid!", t)
             p.recycle()
         }
 
