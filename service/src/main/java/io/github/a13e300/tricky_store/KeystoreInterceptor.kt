@@ -92,7 +92,7 @@ object KeystoreInterceptor : BinderInterceptor() {
                 p.writeTypedObject(response, 0)
                 return OverrideReply(0, p)
             } else {
-                Logger.w("No certificate chain found for uid=$callingUid")
+                Logger.i("No certificate chain found for uid=$callingUid")
                 p.recycle()
             }
         } catch (t: Throwable) {
