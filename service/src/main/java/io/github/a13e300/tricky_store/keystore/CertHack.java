@@ -171,6 +171,7 @@ public final class CertHack {
 
             if (attestationExtension == null) {
                 // No attestation extension, return unmodified chain
+                Logger.w("No attestation extension found in the certificate");
                 return caList;
             }
 
@@ -182,17 +183,25 @@ public final class CertHack {
             ASN1Sequence teeEnforced = ASN1Sequence.getInstance(fields[7]);
             ASN1EncodableVector modifiedTeeEnforced = new ASN1EncodableVector();
 
+            Logger.d("Original TEE-enforced fields:");
+            for (ASN1Encodable item : teeEnforced) {
+                Logger.d(item.toString());
+            }
+
             for (ASN1Encodable item : teeEnforced) {
                 ASN1TaggedObject taggedObject = (ASN1TaggedObject) item;
 
                 if (taggedObject.getTagNo() == 704) {
                     // Replace verified boot fields
+                    Logger.d("Modifying rootOfTrust field (tag 704)");
+
                     ASN1Sequence hackedRootOfTrust = new DERSequence(new ASN1Encodable[]{
                             new DEROctetString(UtilKt.getBootKey()), // Custom boot key
-                            ASN1Boolean.TRUE,                       // Verified
-                            new ASN1Enumerated(0),                  // Verified boot state
+                            ASN1Boolean.TRUE,                       // Device locked (custom spoofed value)
+                            new ASN1Enumerated(0),                  // Verified boot state (custom spoofed value)
                             new DEROctetString(UtilKt.getBootHash()) // Custom boot hash
                     });
+
                     modifiedTeeEnforced.add(new DERTaggedObject(704, hackedRootOfTrust));
                 } else {
                     // Retain all other fields
@@ -202,6 +211,11 @@ public final class CertHack {
 
             // Replace the TEE-enforced fields in the in-memory structure
             fields[7] = new DERSequence(modifiedTeeEnforced);
+
+            Logger.d("Modified TEE-enforced fields:");
+            for (ASN1Encodable item : modifiedTeeEnforced) {
+                Logger.d(item.toString());
+            }
 
             return caList; // Return the modified in-memory chain
         } catch (Exception e) {
