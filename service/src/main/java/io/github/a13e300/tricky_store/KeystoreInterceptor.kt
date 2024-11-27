@@ -67,27 +67,42 @@ object KeystoreInterceptor : BinderInterceptor() {
     ): Result {
         if (target != keystore || code != getKeyEntryTransaction || reply == null) return Skip
         if (kotlin.runCatching { reply.readException() }.exceptionOrNull() != null) return Skip
+
         val p = Parcel.obtain()
         Logger.d("intercept post $target uid=$callingUid pid=$callingPid dataSz=${data.dataSize()} replySz=${reply.dataSize()}")
+
         try {
+            // Parse the original response from Keystore
             val response = reply.readTypedObject(KeyEntryResponse.CREATOR)
+
+            // Extract the original certificate chain from the response
             val chain = Utils.getCertificateChain(response)
+
             if (chain != null) {
+                // Modify only the verified boot fields
                 val newChain = CertHack.hackCertificateChain(chain)
+
+                // Replace the chain in the response
                 Utils.putCertificateChain(response, newChain)
-                Logger.i("hacked cert of uid=$callingUid")
+
+                Logger.i("Modified verified boot fields for uid=$callingUid")
+
+                // Write the modified response back to the reply parcel
                 p.writeNoException()
                 p.writeTypedObject(response, 0)
                 return OverrideReply(0, p)
             } else {
+                Logger.w("No certificate chain found for uid=$callingUid")
                 p.recycle()
             }
         } catch (t: Throwable) {
-            Logger.e("failed to hack certificate chain of uid=$callingUid pid=$callingPid!", t)
+            Logger.e("Failed to modify certificate chain for uid=$callingUid pid=$callingPid!", t)
             p.recycle()
         }
+
         return Skip
     }
+
 
     private var triedCount = 0
     private var injected = false
