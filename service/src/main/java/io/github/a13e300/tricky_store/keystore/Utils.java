@@ -39,6 +39,31 @@ public class Utils {
         }
     }
 
+    public static Certificate[] getCertificateChain(KeyEntryResponse response) {
+        if (response == null || response.metadata.certificate == null) return null;
+
+        try {
+            CertificateFactory certFactory = CertificateFactory.getInstance(CERT_TYPE);
+            ArrayList<Certificate> certs = new ArrayList<>();
+
+            // Parse the primary certificate
+            Certificate leaf = certFactory.generateCertificate(
+                    new ByteArrayInputStream(response.metadata.certificate));
+            certs.add(leaf);
+
+            // Parse the remaining chain if available
+            if (response.metadata.certificateChain != null) {
+                certs.addAll(certFactory.generateCertificates(
+                        new ByteArrayInputStream(response.metadata.certificateChain)));
+            }
+
+            return certs.toArray(new Certificate[0]);
+        } catch (Exception e) {
+            Log.w(TAG, "Failed to parse certificate chain", e);
+            return null;
+        }
+    }    
+
     public static Certificate[] getModifiedCertificateChain(KeyEntryResponse response) {
         if (response == null || response.metadata.certificate == null) return null;
         Certificate[] originalChain = getCertificateChain(response);
