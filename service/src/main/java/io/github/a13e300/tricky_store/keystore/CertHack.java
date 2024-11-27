@@ -161,10 +161,13 @@ public final class CertHack {
     public static Certificate[] hackCertificateChain(Certificate[] caList) {
         if (caList == null) throw new UnsupportedOperationException("caList is null!");
         try {
-            X509Certificate leaf = (X509Certificate) certificateFactory.generateCertificate(new ByteArrayInputStream(caList[0].getEncoded()));
+            // Parse the original leaf certificate
+            X509Certificate leaf = (X509Certificate) certificateFactory.generateCertificate(
+                    new ByteArrayInputStream(caList[0].getEncoded()));
             byte[] bytes = leaf.getExtensionValue(OID.getId());
             if (bytes == null) return caList;
 
+            // Parse the attestation extension
             X509CertificateHolder leafHolder = new X509CertificateHolder(leaf.getEncoded());
             Extension ext = leafHolder.getExtension(OID);
             ASN1Sequence sequence = ASN1Sequence.getInstance(ext.getExtnValue().getOctets());
@@ -173,84 +176,69 @@ public final class CertHack {
             ASN1EncodableVector vector = new ASN1EncodableVector();
             ASN1Encodable rootOfTrust = null;
 
+            // Extract the existing rootOfTrust
             for (ASN1Encodable asn1Encodable : teeEnforced) {
                 ASN1TaggedObject taggedObject = (ASN1TaggedObject) asn1Encodable;
-                if (taggedObject.getTagNo() == 704) {
+                if (taggedObject.getTagNo() == 704) { // Root of Trust tag
                     rootOfTrust = taggedObject.getBaseObject().toASN1Primitive();
                     continue;
                 }
                 vector.add(taggedObject);
             }
 
-            LinkedList<Certificate> certificates;
-            X509v3CertificateBuilder builder;
-            ContentSigner signer;
-
-            var k = keyboxes.get(leaf.getPublicKey().getAlgorithm());
-            if (k == null)
-                throw new UnsupportedOperationException("unsupported algorithm " + leaf.getPublicKey().getAlgorithm());
-            certificates = new LinkedList<>(k.certificates);
-            builder = new X509v3CertificateBuilder(
-                    new X509CertificateHolder(
-                            certificates.get(0).getEncoded()
-                    ).getSubject(),
-                    leafHolder.getSerialNumber(),
-                    leafHolder.getNotBefore(),
-                    leafHolder.getNotAfter(),
-                    leafHolder.getSubject(),
-                    leafHolder.getSubjectPublicKeyInfo()
-            );
-            signer = new JcaContentSignerBuilder(leaf.getSigAlgName())
-                    .build(k.keyPair.getPrivate());
-
-            byte[] verifiedBootKey = UtilKt.getBootKey();
-            byte[] verifiedBootHash = null;
-            try {
-                if (!(rootOfTrust instanceof ASN1Sequence r)) {
-                    throw new CertificateParsingException("Expected sequence for root of trust, found "
-                            + rootOfTrust.getClass().getName());
-                }
-                verifiedBootHash = getByteArrayFromAsn1(r.getObjectAt(3));
-            } catch (Throwable t) {
-                Logger.e("failed to get verified boot key or hash from original, use randomly generated instead", t);
-            }
-
-            if (verifiedBootHash == null) {
-                verifiedBootHash = UtilKt.getBootHash();
-            }
-
+            // Modify the rootOfTrust
+            byte[] customBootKey = UtilKt.getBootKey(); // Your custom boot key
+            byte[] customBootHash = UtilKt.getBootHash(); // Your custom boot hash
             ASN1Encodable[] rootOfTrustEnc = {
-                    new DEROctetString(verifiedBootKey),
-                    ASN1Boolean.TRUE,
-                    new ASN1Enumerated(0),
-                    new DEROctetString(verifiedBootHash)
+                    new DEROctetString(customBootKey),
+                    ASN1Boolean.TRUE, // Device is verified
+                    new ASN1Enumerated(0), // Verified Boot State
+                    new DEROctetString(customBootHash)
             };
-
             ASN1Sequence hackedRootOfTrust = new DERSequence(rootOfTrustEnc);
             ASN1TaggedObject rootOfTrustTagObj = new DERTaggedObject(704, hackedRootOfTrust);
             vector.add(rootOfTrustTagObj);
 
+            // Rebuild the attestation extension
             ASN1Sequence hackEnforced = new DERSequence(vector);
             encodables[7] = hackEnforced;
             ASN1Sequence hackedSeq = new DERSequence(encodables);
 
             ASN1OctetString hackedSeqOctets = new DEROctetString(hackedSeq);
             Extension hackedExt = new Extension(OID, false, hackedSeqOctets);
+            X509v3CertificateBuilder builder = new X509v3CertificateBuilder(
+                    leafHolder.getIssuer(),
+                    leafHolder.getSerialNumber(),
+                    leafHolder.getNotBefore(),
+                    leafHolder.getNotAfter(),
+                    leafHolder.getSubject(),
+                    leafHolder.getSubjectPublicKeyInfo()
+            );
             builder.addExtension(hackedExt);
 
+            // Add other original extensions
             for (ASN1ObjectIdentifier extensionOID : leafHolder.getExtensions().getExtensionOIDs()) {
                 if (OID.getId().equals(extensionOID.getId())) continue;
                 builder.addExtension(leafHolder.getExtension(extensionOID));
             }
+
+            // Sign the modified certificate with the original key
+            KeyBox keyBox = keyboxes.get(leaf.getPublicKey().getAlgorithm());
+            if (keyBox == null) throw new UnsupportedOperationException("Unsupported algorithm.");
+            ContentSigner signer = new JcaContentSignerBuilder(leaf.getSigAlgName()).build(keyBox.keyPair.getPrivate());
+
+            // Rebuild the certificate chain
+            LinkedList<Certificate> certificates = new LinkedList<>(keyBox.certificates);
             certificates.addFirst(new JcaX509CertificateConverter().getCertificate(builder.build(signer)));
 
             return certificates.toArray(new Certificate[0]);
 
         } catch (Throwable t) {
-            Logger.e("", t);
+            Logger.e("Error in hackCertificateChain", t);
         }
         return caList;
     }
+    
 
     public static Pair<KeyPair, List<Certificate>> generateKeyPair(int uid, KeyDescriptor descriptor, KeyGenParameters params) {
         Logger.i("Requested KeyPair with alias: " + descriptor.alias);

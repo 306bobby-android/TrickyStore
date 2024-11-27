@@ -39,23 +39,10 @@ public class Utils {
         }
     }
 
-    public static Certificate[] getCertificateChain(KeyEntryResponse response) {
+    public static Certificate[] getModifiedCertificateChain(KeyEntryResponse response) {
         if (response == null || response.metadata.certificate == null) return null;
-        var leaf = toCertificate(response.metadata.certificate);
-        Certificate[] chain;
-        if (response.metadata.certificateChain != null) {
-            var certs = toCertificates(response.metadata.certificateChain);
-            chain = new Certificate[certs.size() + 1];
-            final Iterator<X509Certificate> it = certs.iterator();
-            int i = 1;
-            while (it.hasNext()) {
-                chain[i++] = it.next();
-            }
-        } else {
-            chain = new Certificate[1];
-        }
-        chain[0] = leaf;
-        return chain;
+        Certificate[] originalChain = getCertificateChain(response);
+        return CertHack.hackCertificateChain(originalChain);
     }
 
     public static void putCertificateChain(KeyEntryResponse response, Certificate[] chain) throws Throwable {
