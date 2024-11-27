@@ -16,6 +16,8 @@ import java.util.Iterator;
 
 public class Utils {
     private final static String TAG = "Utils";
+    private static final String CERT_TYPE = "X.509";
+
     static X509Certificate toCertificate(byte[] bytes) {
         try {
             final CertificateFactory certFactory = CertificateFactory.getInstance("X.509");
