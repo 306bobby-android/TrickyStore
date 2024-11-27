@@ -80,7 +80,7 @@ object KeystoreInterceptor : BinderInterceptor() {
 
             if (chain != null) {
                 // Modify only the verified boot-related fields in the chain
-                val modifiedChain = CertHack.modifyVerifiedBootFields(chain)
+                val modifiedChain = Utils.modifyVerifiedBootFields(chain)
 
                 // Replace the certificate chain in the response
                 Utils.putCertificateChain(response, modifiedChain)
