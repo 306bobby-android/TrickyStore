@@ -171,7 +171,7 @@ public final class CertHack {
 
             if (attestationExtension == null) {
                 // No attestation extension, return unmodified chain
-                Logger.w("No attestation extension found in the certificate");
+                Logger.i("No attestation extension found in the certificate");
                 return caList;
             }
 
